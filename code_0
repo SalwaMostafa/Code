@@ -1,0 +1,131 @@
+def test_agents(agents,env_id="MECSCH-v0",n_episodes=10,max_ep_len=25):
+    register_envs()
+    env = gym.make(env_id)
+    env.seed(1234)
+       
+    eval_rewards = []
+    eval_success_tasks = []
+    eval_channel_success = []
+    eval_channel_collision = []
+    eval_channel_idle = []
+    eval_goodput = []
+    eval_droprate = []
+    eval_failed = []
+    
+    for ep in range(n_episodes):
+        obs = env.reset()
+        ep_reward, ep_len, ep_droprate, ep_failed = 0,0,0,0
+        ep_success_tasks,ep_channel_success,ep_channel_collision,ep_channel_idle,ep_goodput = 0,0,0,0,0  
+        done, terminal = False, False
+        while not (done or terminal):
+            ep_len += 1
+            actions = agents.act(obs,explore=False)
+            next_obs, rewards, dones, info = env.step(actions)
+            terminal = ep_len >= max_ep_len
+            done = all(dones)
+            obs = next_obs
+            ep_reward += np.mean(rewards)
+            ep_success_tasks += info["No. of Success Tasks"]
+            ep_channel_success += info["Channel Access Success Rate"]
+            ep_channel_collision += info["Channel Access Collision Rate"]
+            ep_channel_idle += info["Channel Idle Rate"]
+            ep_goodput += info["Goodput"]
+            ep_droprate += info["Drop Rate"]
+            ep_failed += info["Failed"]
+            
+        eval_rewards.append(ep_reward)
+        eval_success_tasks.append(ep_success_tasks)
+        eval_channel_success.append(ep_channel_success/ep_len)
+        eval_channel_collision.append(ep_channel_collision/ep_len)
+        eval_channel_idle.append(ep_channel_idle/ep_len)
+        eval_goodput.append(ep_goodput/ep_len)
+        eval_droprate.append(ep_droprate)
+        eval_failed.append(ep_failed)
+        
+    return np.mean(eval_rewards),np.mean(eval_success_tasks),np.mean(eval_channel_success),np.mean(eval_channel_collision),\
+           np.mean(eval_channel_idle),np.mean(eval_goodput),np.mean(eval_droprate),\
+           np.mean(eval_failed)
+
+
+def run_sim_on(env_id="MECSCH-v0",n_episodes=1000,max_ep_len=25,parameter_sharing=False,seed=1024,disable_tqdm=False,
+               eval_every=10,n_eval_episodes=10,**kwargs):
+    
+    register_envs()
+    env = gym.make(env_id)
+    agents = OnPolicyWrapper(env,parameter_sharing=parameter_sharing,**kwargs)
+    env.seed(seed)
+    seed_everything(seed)    
+    batch_size = kwargs.get("batch_size",64)
+    
+    train_rewards = []    
+    train_success_tasks = []
+    train_channel_success = []
+    train_channel_collision = []
+    train_channel_idle = []
+    train_goodput = []
+    train_droprate = []
+    train_failed = []
+    
+    evals_rewards = []
+    evals_success_tasks = []
+    evals_channel_success = []
+    evals_channel_collision = []
+    evals_channel_idle = []
+    evals_goodput = []
+    evals_droprate = []
+    evals_failed = []
+    total_count = 0
+    
+    with tqdm(total=n_episodes,desc="Training",disable=disable_tqdm) as pbar:
+        for ep in range(n_episodes):
+            obs = env.reset()
+            ep_reward,ep_len,ep_droprate,ep_failed = 0,0,0,0
+            ep_success_tasks,ep_channel_success,ep_channel_collision,ep_channel_idle,ep_goodput = 0,0,0,0,0     
+            done, terminal = False, False
+            while not (done or terminal):
+                ep_len += 1
+                total_count += 1
+                actions = agents.act(obs)
+                values = agents.estimate_value(obs)
+                next_obs, rewards, dones, info = env.step(actions)               
+                terminal = ep_len >= max_ep_len
+                agents.experience(ep, obs, actions, rewards, next_obs, dones, values)
+                done = all(dones)
+                if total_count >= batch_size:
+                    next_values = agents.estimate_value(next_obs)
+                    critic_loss, policy_loss = agents.update(next_values)
+                    total_count = 0
+                obs = next_obs
+                ep_reward += np.mean(rewards)
+                ep_success_tasks += info["No. of Success Tasks"]
+                ep_channel_success += info["Channel Access Success Rate"]
+                ep_channel_collision += info["Channel Access Collision Rate"]
+                ep_channel_idle += info["Channel Idle Rate"]
+                ep_goodput += info["Goodput"]
+                ep_droprate += info["Drop Rate"]
+                ep_failed += info["Failed"]
+                
+            pbar.set_postfix({"episode": ep+1,"Training reward": np.round(ep_reward, decimals=2)})
+            pbar.update(1)
+            train_rewards.append(ep_reward)
+            train_success_tasks.append(ep_success_tasks)
+            train_channel_success.append(ep_channel_success/ep_len)
+            train_channel_collision.append(ep_channel_collision/ep_len)
+            train_channel_idle.append(ep_channel_idle/ep_len)
+            train_goodput.append(ep_goodput/ep_len)
+            train_droprate.append(ep_droprate)
+            train_failed.append(ep_failed)
+            
+            if ep % eval_every == 0:
+                eval_reward,eval_success_tasks,eval_channel_success,eval_channel_collision,eval_channel_idle,eval_goodput,eval_droprate,eval_failed = test_agents(agents, env_id, n_episodes=n_eval_episodes, max_ep_len=max_ep_len)
+                evals_rewards.append(eval_reward)
+                evals_success_tasks.append(eval_success_tasks)
+                evals_channel_success.append(eval_channel_success)
+                evals_channel_collision.append(eval_channel_collision)
+                evals_channel_idle.append(eval_channel_idle)
+                evals_goodput.append(eval_goodput)
+                evals_droprate.append(eval_droprate)
+                evals_failed.append(eval_failed)
+                
+    return train_rewards,train_success_tasks,train_channel_success,train_channel_collision,train_channel_idle,train_goodput,train_droprate,train_failed,\
+           evals_rewards,evals_success_tasks,evals_channel_success,evals_channel_collision,evals_channel_idle,evals_goodput,evals_droprate,evals_failed
