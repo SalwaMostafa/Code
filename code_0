@@ -42,9 +42,9 @@ def test_agents(agents,env_id="MECSCH-v0",n_episodes=10,max_ep_len=25):
         eval_droprate.append(ep_droprate)
         eval_failed.append(ep_failed)
         
-    return np.mean(eval_rewards),np.mean(eval_success_tasks),np.mean(eval_channel_success),np.mean(eval_channel_collision),\
-           np.mean(eval_channel_idle),np.mean(eval_goodput),np.mean(eval_droprate),\
-           np.mean(eval_failed)
+    return eval_rewards,eval_success_tasks,eval_channel_success,eval_channel_collision,\
+           eval_channel_idle,eval_goodput,eval_droprate,\
+           eval_failed
 
 
 def run_sim_on(env_id="MECSCH-v0",n_episodes=1000,max_ep_len=25,parameter_sharing=False,seed=1024,disable_tqdm=False,
@@ -118,14 +118,14 @@ def run_sim_on(env_id="MECSCH-v0",n_episodes=1000,max_ep_len=25,parameter_sharin
             
             if ep % eval_every == 0:
                 eval_reward,eval_success_tasks,eval_channel_success,eval_channel_collision,eval_channel_idle,eval_goodput,eval_droprate,eval_failed = test_agents(agents, env_id, n_episodes=n_eval_episodes, max_ep_len=max_ep_len)
-                evals_rewards.append(eval_reward)
-                evals_success_tasks.append(eval_success_tasks)
-                evals_channel_success.append(eval_channel_success)
-                evals_channel_collision.append(eval_channel_collision)
-                evals_channel_idle.append(eval_channel_idle)
-                evals_goodput.append(eval_goodput)
-                evals_droprate.append(eval_droprate)
-                evals_failed.append(eval_failed)
+                evals_rewards.append(np.mean(eval_reward))
+                evals_success_tasks.append(np.mean(eval_success_tasks))
+                evals_channel_success.append(np.mean(eval_channel_success))
+                evals_channel_collision.append(np.mean(eval_channel_collision))
+                evals_channel_idle.append(np.mean(eval_channel_idle))
+                evals_goodput.append(np.mean(eval_goodput))
+                evals_droprate.append(np.mean(eval_droprate))
+                evals_failed.append(np.mean(eval_failed))
                 
     return train_rewards,train_success_tasks,train_channel_success,train_channel_collision,train_channel_idle,train_goodput,train_droprate,train_failed,\
            evals_rewards,evals_success_tasks,evals_channel_success,evals_channel_collision,evals_channel_idle,evals_goodput,evals_droprate,evals_failed
